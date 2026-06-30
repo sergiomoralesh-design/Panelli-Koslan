@@ -1916,75 +1916,20 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 // ── Google Sheets Sync ────────────────────────────────────────────────────────
-var GS_DATA_KEY   = 'koslan_gs_data_url';
-var GS_MSTOCK_KEY = 'koslan_gs_mstock_url';
+// Fixed Google Sheets URLs — same data source for every visitor, no per-user setup needed.
+var GS_DATA_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS7CeWv45VcopRJVFLiCIYOlzNFql_dHqRDQrn-swebNGbKqKU9f9oUQYF1wTDybfh_5kp1SkXf7MIP/pub?gid=1947020215&single=true&output=csv';
+var GS_MSTOCK_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS7CeWv45VcopRJVFLiCIYOlzNFql_dHqRDQrn-swebNGbKqKU9f9oUQYF1wTDybfh_5kp1SkXf7MIP/pub?gid=1880805340&single=true&output=csv';
 
-// Load saved URLs on startup
-(function loadSavedUrls(){
-  try {
-    var d = localStorage.getItem(GS_DATA_KEY);
-    var m = localStorage.getItem(GS_MSTOCK_KEY);
-    if(d){ document.getElementById('gs-data-url').value = d; }
-    if(m){ document.getElementById('gs-mstock-url').value = m; }
-    // Auto-sync if both URLs are saved
-    if(d && m) syncFromSheets(true);
-  } catch(e) {}
+// Auto-sync on app load — every visitor gets the same live data automatically.
+(function autoSyncOnLoad(){
+  try { syncFromSheets(true); } catch(e) {}
 })();
-
-function saveSheetUrls(){
-  try {
-    var d = document.getElementById('gs-data-url').value.trim();
-    var m = document.getElementById('gs-mstock-url').value.trim();
-    if(!d || !m){ alert('Ingresa ambas URLs antes de guardar.'); return; }
-    localStorage.setItem(GS_DATA_KEY, d);
-    localStorage.setItem(GS_MSTOCK_KEY, m);
-    var st = document.getElementById('recipe-status');
-    st.className='cfg-status ok'; st.style.display='block';
-    st.textContent = '✓ URLs guardadas. La app las usará automáticamente al cargar.';
-  } catch(e) {
-    alert('No se pudieron guardar las URLs: ' + e.message);
-  }
-}
-
-// Parse a number that may come in Chilean format (1.234.567,89) or
-// plain CSV-exported format (1234567.89 — Google Sheets CSV export uses '.' as decimal,
-// no thousand separators). Strips currency symbols and spaces, then decides format.
-function parseCLNumber(raw){
-  if(raw === null || raw === undefined) return 0;
-  var s = String(raw).trim();
-  if(!s) return 0;
-  // Remove currency symbols and spaces (keep digits, dot, comma, minus)
-  s = s.replace(/[^0-9.,-]/g, '');
-  if(!s) return 0;
-
-  // Google Sheets CSV export (Chilean locale spreadsheet) uses '.' as the
-  // THOUSAND separator and ',' as the DECIMAL separator — confirmed against
-  // real exported data: "791.124,00", "2.825.539", "2663547,5".
-  if(s.indexOf(',') !== -1){
-    // Comma present → it is the decimal separator; strip dots (thousands)
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if(s.indexOf('.') !== -1){
-    // Only dots, no comma → thousand separators only, no fractional part
-    s = s.replace(/\./g, '');
-  }
-
-  var n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
 
 
 function syncFromSheets(silent){
-  var dataUrl   = document.getElementById('gs-data-url').value.trim();
-  var mstockUrl = document.getElementById('gs-mstock-url').value.trim();
+  var dataUrl   = GS_DATA_URL;
+  var mstockUrl = GS_MSTOCK_URL;
   var st = document.getElementById('recipe-status');
-
-  if(!dataUrl || !mstockUrl){
-    if(!silent){
-      st.className='cfg-status err'; st.style.display='block';
-      st.innerHTML = '✗ Ingresa ambas URLs de Google Sheets primero.';
-    }
-    return;
-  }
 
   st.className='cfg-status loading'; st.style.display='block';
   st.textContent = '⏳ Descargando datos desde Google Sheets' + (window.location.protocol==='file:' ? ' (vía proxy CORS)...' : '...');
@@ -2188,44 +2133,27 @@ function parseCSV(text){
       <div id="pump-status" class="cfg-status" style="display:none"></div>
     </div>
 
-    <!-- RECIPE / STOCK — GOOGLE SHEETS SYNC -->
+    <!-- RECIPE / STOCK — GOOGLE SHEETS SYNC (automático para todos los usuarios) -->
     <div class="card" style="gap:14px">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:38px;height:38px;background:#edfbf3;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">&#128230;</div>
         <div>
           <div class="card-title">Recetas y Stock — Google Sheets</div>
-          <div style="font-size:12px;color:#8898aa;margin-top:2px">Los datos se sincronizan automáticamente desde la planilla · actualmente <strong id="recipe-count">cargando...</strong> modelos</div>
+          <div style="font-size:12px;color:#8898aa;margin-top:2px">Sincronización automática al abrir la app · actualmente <strong id="recipe-count">cargando...</strong> modelos</div>
         </div>
       </div>
 
-      <!-- URL inputs -->
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div>
-          <div class="flabel">URL pública — hoja <strong>Data</strong> (recetas)</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="gs-data-url" class="finp" style="font-size:12px;flex:1"
-              placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=...">
-          </div>
-        </div>
-        <div>
-          <div class="flabel">URL pública — hoja <strong>MStock</strong> (stock y costos)</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="gs-mstock-url" class="finp" style="font-size:12px;flex:1"
-              placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=...">
-          </div>
-        </div>
+      <div style="font-size:12px;color:#5a6a85;background:#f0f4ff;border:1px solid #c0ccf5;border-radius:8px;padding:10px 12px">
+        &#9432; Todos los usuarios ven los mismos datos, sincronizados automáticamente desde la planilla de Google Sheets compartida.
       </div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" style="max-width:none;flex:1" onclick="syncFromSheets()">&#128260; Sincronizar ahora</button>
-        <button class="btn" onclick="saveSheetUrls()" style="max-width:none;background:#fff;color:#1e4fc7;border:1px solid #1e4fc7;flex:0 0 auto">&#128190; Guardar URLs</button>
-      </div>
+      <button class="btn" style="max-width:none" onclick="syncFromSheets()">&#128260; Sincronizar ahora</button>
 
       <div id="recipe-status" class="cfg-status" style="display:none"></div>
 
       <!-- Manual fallback -->
       <details style="margin-top:4px">
-        <summary style="font-size:12px;color:#8898aa;cursor:pointer;user-select:none">&#128196; O carga un archivo Excel manualmente (alternativa)</summary>
+        <summary style="font-size:12px;color:#8898aa;cursor:pointer;user-select:none">&#128196; O carga un archivo Excel manualmente (alternativa temporal)</summary>
         <div style="margin-top:10px">
           <div id="recipe-file-zone" class="cfg-dropzone" onclick="document.getElementById('recipe-file-input').click()" ondragover="cfgDragOver(event)" ondragleave="cfgDragLeave(event,'recipe-file-zone')" ondrop="cfgDrop(event,'recipe')">
             <div style="font-size:24px;margin-bottom:4px">&#128202;</div>
