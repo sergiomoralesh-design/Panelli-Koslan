@@ -1946,6 +1946,33 @@ function saveSheetUrls(){
   }
 }
 
+// Parse a number that may come in Chilean format (1.234.567,89) or
+// plain CSV-exported format (1234567.89 — Google Sheets CSV export uses '.' as decimal,
+// no thousand separators). Strips currency symbols and spaces, then decides format.
+function parseCLNumber(raw){
+  if(raw === null || raw === undefined) return 0;
+  var s = String(raw).trim();
+  if(!s) return 0;
+  // Remove currency symbols and spaces (keep digits, dot, comma, minus)
+  s = s.replace(/[^0-9.,-]/g, '');
+  if(!s) return 0;
+
+  // Google Sheets CSV export (Chilean locale spreadsheet) uses '.' as the
+  // THOUSAND separator and ',' as the DECIMAL separator — confirmed against
+  // real exported data: "791.124,00", "2.825.539", "2663547,5".
+  if(s.indexOf(',') !== -1){
+    // Comma present → it is the decimal separator; strip dots (thousands)
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if(s.indexOf('.') !== -1){
+    // Only dots, no comma → thousand separators only, no fractional part
+    s = s.replace(/\./g, '');
+  }
+
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+
 function syncFromSheets(silent){
   var dataUrl   = document.getElementById('gs-data-url').value.trim();
   var mstockUrl = document.getElementById('gs-mstock-url').value.trim();
@@ -2000,8 +2027,8 @@ function syncFromSheets(silent){
         var r = mstockRows[i];
         var cod = parseInt(r[0]);
         if(!cod || isNaN(cod)) continue;
-        var cu  = parseFloat(r[3]) || 0;
-        var stk = parseFloat(r[4]) || 0;
+        var cu  = parseCLNumber(r[3]);
+        var stk = parseCLNumber(r[4]);
         stockMap[cod] = {cu: cu, stk: stk};
       }
 
@@ -2012,7 +2039,7 @@ function syncFromSheets(silent){
         var dr = dataRows[j];
         var modelo = (dr[6] || '').trim();
         var cod2   = parseInt(dr[1]);
-        var cant   = parseFloat(dr[3]) || 0;
+        var cant   = parseCLNumber(dr[3]);
         var desc   = (dr[4] || '').trim();
         if(!modelo || !cod2 || !desc) continue;
 
